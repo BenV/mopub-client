@@ -92,6 +92,7 @@ public class AdView extends WebView {
     private MoPubView mMoPubView;
     private HttpResponse mResponse;
     private String mResponseString;
+    private String mUserAgent; // Grab user agent once at beginning to prevent NPE
 
     public AdView(Context context, MoPubView view) {
         super(context);
@@ -99,8 +100,15 @@ public class AdView extends WebView {
         mMoPubView = view;
         mAutorefreshEnabled = true;
 
-        setVerticalScrollBarEnabled(false);
+        // Disable scrolling and zoom
         setHorizontalScrollBarEnabled(false);
+        setHorizontalScrollbarOverlay(false);
+        setVerticalScrollBarEnabled(false);
+        setVerticalScrollbarOverlay(false);
+        getSettings().setSupportZoom(false);
+
+        // Store user agent string
+        mUserAgent = getSettings().getUserAgentString();
         
         getSettings().setJavaScriptEnabled(true);
         getSettings().setPluginsEnabled(true);
@@ -228,7 +236,7 @@ public class AdView extends WebView {
         HttpConnectionParams.setSocketBufferSize(httpParameters, 8192);
 
         HttpGet httpget = new HttpGet(url);
-        httpget.addHeader("User-Agent", getSettings().getUserAgentString());
+        httpget.addHeader("User-Agent", mUserAgent);
         DefaultHttpClient httpclient = new DefaultHttpClient(httpParameters);
         mResponse = httpclient.execute(httpget);
         HttpEntity entity = mResponse.getEntity();
@@ -450,7 +458,7 @@ public class AdView extends WebView {
             public void run () {
                 DefaultHttpClient httpclient = new DefaultHttpClient();
                 HttpGet httpget = new HttpGet(mImpressionUrl);
-                httpget.addHeader("User-Agent", getSettings().getUserAgentString());
+                httpget.addHeader("User-Agent", mUserAgent);
                 try {
                     httpclient.execute(httpget);
                 } catch (ClientProtocolException e) {
@@ -470,7 +478,7 @@ public class AdView extends WebView {
             public void run () {
                 DefaultHttpClient httpclient = new DefaultHttpClient();
                 HttpGet httpget = new HttpGet(mClickthroughUrl);
-                httpget.addHeader("User-Agent", getSettings().getUserAgentString());
+                httpget.addHeader("User-Agent", mUserAgent);
                 try {
                     httpclient.execute(httpget);
                 } catch (ClientProtocolException e) {
