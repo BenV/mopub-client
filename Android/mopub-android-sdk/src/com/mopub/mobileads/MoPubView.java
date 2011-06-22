@@ -204,7 +204,9 @@ public class MoPubView extends FrameLayout {
     
     protected void trackNativeImpression() {
         Log.d("MoPub", "Tracking impression for native adapter.");
-        mAdView.trackImpression();
+        if(mAdView != null){
+            mAdView.trackImpression();
+        }
     }
 
     // Getters and Setters
