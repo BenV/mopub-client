@@ -44,6 +44,7 @@ static NSString * const kAdTypeHeaderKey			= @"X-Adtype";
 static NSString * const kNetworkTypeHeaderKey		= @"X-Networktype";
 static NSString * const kAdTypeHtml					= @"html";
 static NSString * const kAdTypeClear				= @"clear";
+static NSString * userAgentString;
 
 @interface MPAdView (Internal)
 - (void)registerForApplicationStateTransitionNotifications;
@@ -68,7 +69,6 @@ static NSString * const kAdTypeClear				= @"clear";
 - (NSString *)timeZoneQueryStringComponent;
 - (NSString *)locationQueryStringComponent;
 - (NSURLRequest *)serverRequestObjectForUrl:(NSURL *)url;
-- (NSString *)userAgentString;
 @end
 
 @interface MPAdView ()
@@ -106,6 +106,9 @@ static NSString * const kAdTypeClear				= @"clear";
 
 + (void)initialize
 {
+	UIWebView *webview = [[UIWebView alloc] init];
+	userAgentString = [webview stringByEvaluatingJavaScriptFromString:@"navigator.userAgent"];
+	[webview release];
 	srandom(time(NULL));
 }
 
@@ -377,7 +380,7 @@ static NSString * const kAdTypeClear				= @"clear";
 
 - (NSURL *)serverRequestUrl
 {
-	NSString *urlString = [NSString stringWithFormat:@"http://%@/m/ad?v=4&udid=%@&q=%@&id=%@", 
+	NSString *urlString = [NSString stringWithFormat:@"http://%@/m/ad?v=5&udid=%@&q=%@&id=%@", 
 						   HOSTNAME,
 						   [[UIDevice currentDevice] hashedMoPubUDID],
 						   [self.keywords stringByAddingPercentEscapesUsingEncoding:NSUTF8StringEncoding],
@@ -440,29 +443,10 @@ static NSString * const kAdTypeClear				= @"clear";
 	// Set the user agent so that we know where the request is coming from (for targeting).
 	if ([request respondsToSelector:@selector(setValue:forHTTPHeaderField:)]) 
 	{
-		NSString *userAgentString = [self userAgentString];
 		[request setValue:userAgentString forHTTPHeaderField:@"User-Agent"];
 	}			
 	
 	return request;
-}
-
-- (NSString *)userAgentString
-{
-	NSString *systemVersion = [[UIDevice currentDevice] systemVersion];
-	NSString *systemName = [[UIDevice currentDevice] systemName];
-	NSString *model = [[UIDevice currentDevice] model];
-	NSString *bundleName = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleName"];
-	NSString *appVersion = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleVersion"];			
-	return [NSString stringWithFormat:
-			@"%@/%@ (%@; U; CPU %@ %@ like Mac OS X; %@)",
-			bundleName, 
-			appVersion, 
-			model,
-			systemName, 
-			systemVersion, 
-			[[NSLocale currentLocale] localeIdentifier]
-			];
 }
 
 - (void)didCloseAd:(id)sender
