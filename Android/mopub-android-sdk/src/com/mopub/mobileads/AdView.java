@@ -180,10 +180,9 @@ public class AdView extends WebView {
         mMoPubView.removeAllViews();
         FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.FILL_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.CENTER);
         mMoPubView.addView(this, layoutParams);
-
         mMoPubView.adLoaded();
     }
 

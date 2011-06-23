@@ -48,6 +48,7 @@ public class MoPubInterstitial {
     private MoPubInterstitialListener mListener;
     private Activity mActivity;
     private String mAdUnitId;
+    private Class mActivityClass;
     
     public interface MoPubInterstitialListener {
         public void OnInterstitialLoaded();
@@ -85,9 +86,14 @@ public class MoPubInterstitial {
         }
     }
     
-    public MoPubInterstitial(Activity activity, String id) {
+    public MoPubInterstitial(Activity activity, String id){
+        this(activity, id, MoPubActivity.class);
+    }
+
+    public MoPubInterstitial(Activity activity, String id, Class<? extends MoPubActivity> activityClass) {
         mActivity = activity;
         mAdUnitId = id;
+        mActivityClass = activityClass;
         
         mInterstitialView = new MoPubInterstitialView(mActivity);
         mInterstitialView.setAdUnitId(mAdUnitId);
@@ -99,7 +105,7 @@ public class MoPubInterstitial {
                 
                 if (mActivity != null) {
                     String responseString = mInterstitialView.getResponseString();
-                    Intent i = new Intent(mActivity, MoPubActivity.class);
+                    Intent i = new Intent(mActivity, mActivityClass);
                     i.putExtra("com.mopub.mobileads.AdUnitId", mAdUnitId);
                     i.putExtra("com.mopub.mobileads.Source", responseString);
                     mActivity.startActivity(i);

@@ -35,6 +35,7 @@ package com.mopub.mobileads;
 import android.app.Activity;
 import android.content.res.Configuration;
 import android.os.Bundle;
+import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.RelativeLayout;
@@ -42,7 +43,7 @@ import android.widget.RelativeLayout;
 public class MoPubActivity extends Activity {
     public static final int MOPUB_ACTIVITY_NO_AD = 1234;
 
-    private MoPubView mMoPubView;
+    protected MoPubView mMoPubView;
     private RelativeLayout mLayout;
 
     /** Called when the activity is first created. */
@@ -76,14 +77,7 @@ public class MoPubActivity extends Activity {
         }
 
         this.getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        mLayout = new RelativeLayout(this);
-
-        final RelativeLayout.LayoutParams adViewLayout = new RelativeLayout.LayoutParams(
-                RelativeLayout.LayoutParams.FILL_PARENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
-        adViewLayout.addRule(RelativeLayout.CENTER_IN_PARENT);
-        mLayout.addView(mMoPubView, adViewLayout);
-
-        setContentView(mLayout);
+        setContentView(createContentView());
     }
     
     @Override
@@ -96,7 +90,21 @@ public class MoPubActivity extends Activity {
         mMoPubView.destroy(true);
         super.onDestroy();
     }
-    
+
+    /**
+     * Create the content view, override this to use a custom layout
+     * @return The content view for the activity
+     */
+    protected View createContentView(){
+        mLayout = new RelativeLayout(this);
+
+        final RelativeLayout.LayoutParams adViewLayout = new RelativeLayout.LayoutParams(
+                RelativeLayout.LayoutParams.FILL_PARENT, RelativeLayout.LayoutParams.WRAP_CONTENT);
+        adViewLayout.addRule(RelativeLayout.CENTER_IN_PARENT);
+        mLayout.addView(mMoPubView, adViewLayout);
+        return(mLayout);
+    }
+
     private String sourceWithImpressionTrackingDisabled(String source) {
         // TODO: Temporary fix. Disables impression tracking by renaming the pixel tracker's URL.
         return source.replaceAll("http://ads.mopub.com/m/imp", "mopub://null");
