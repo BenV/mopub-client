@@ -109,7 +109,7 @@ public class AdView extends WebView {
     private MoPubView mMoPubView;
     private HttpResponse mResponse;
     private String mResponseString;
-    private String mUserAgent; // Grab user agent once at beginning to prevent NPE
+    private String mUserAgent;
 
     public AdView(Context context, MoPubView view) {
         super(context);
@@ -124,7 +124,7 @@ public class AdView extends WebView {
         setVerticalScrollbarOverlay(false);
         getSettings().setSupportZoom(false);
 
-        // Store user agent string
+        // Store user agent string at beginning to prevent NPE during background thread operations
         mUserAgent = getSettings().getUserAgentString();
         
         getSettings().setJavaScriptEnabled(true);
