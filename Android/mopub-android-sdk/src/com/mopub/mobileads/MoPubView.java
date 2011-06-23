@@ -159,10 +159,23 @@ public class MoPubView extends FrameLayout {
      * Activity's onDestroy implementation must include a call to this method.
      */
     public void destroy() {
+        destroy(false);
+    }
+
+    /**
+     * Destroy the ad view, optionally destroying the WebView as well. This is needed
+     * if you have an ad that plays audio so that the audio will stop right away.
+     * @param destroyWebView True if the WebView should be destroyed as well
+     */
+    public void destroy(boolean destroyWebView){
         unregisterScreenStateBroadcastReceiver();
-        
+
         if (mAdView != null) {
             mAdView.cleanup();
+            if(destroyWebView){
+                removeAllViews();
+                mAdView.destroy();
+            }
             mAdView = null;
         }
     }

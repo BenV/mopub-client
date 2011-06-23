@@ -93,7 +93,7 @@ public class MoPubActivity extends Activity {
     
     @Override
     protected void onDestroy() {
-        mMoPubView.destroy();
+        mMoPubView.destroy(true);
         super.onDestroy();
     }
     
