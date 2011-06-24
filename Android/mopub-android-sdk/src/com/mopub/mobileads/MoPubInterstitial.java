@@ -49,7 +49,12 @@ public class MoPubInterstitial {
     private Activity mActivity;
     private String mAdUnitId;
     private Class mActivityClass;
-    
+
+    // TODO: Support prefetched native ads
+    private boolean mPrefetchingAd;
+    private static AdInfo sPrefetchedAd;
+
+
     public interface MoPubInterstitialListener {
         public void OnInterstitialLoaded();
         public void OnInterstitialFailed();
@@ -85,6 +90,24 @@ public class MoPubInterstitial {
             mAdView.trackImpression();
         }
     }
+
+    private static class AdInfo {
+        private final String mAdUnitId;
+        private final String mResponseString;
+
+        public AdInfo(String adUnitId, String responseString){
+            mAdUnitId = adUnitId;
+            mResponseString = responseString;
+        }
+
+        public String getAdUnitId(){
+            return(mAdUnitId);
+        }
+
+        public String getmResponseString(){
+            return(mResponseString);
+        }
+    }
     
     public MoPubInterstitial(Activity activity, String id){
         this(activity, id, MoPubActivity.class);
@@ -99,16 +122,16 @@ public class MoPubInterstitial {
         mInterstitialView.setAdUnitId(mAdUnitId);
         mInterstitialView.setOnAdLoadedListener(new OnAdLoadedListener() {
             public void OnAdLoaded(MoPubView m) {
+                AdInfo adInfo = new AdInfo(mAdUnitId, mInterstitialView.getResponseString());
                 if (mListener != null) {
                     mListener.OnInterstitialLoaded();
                 }
-                
-                if (mActivity != null) {
-                    String responseString = mInterstitialView.getResponseString();
-                    Intent i = new Intent(mActivity, mActivityClass);
-                    i.putExtra("com.mopub.mobileads.AdUnitId", mAdUnitId);
-                    i.putExtra("com.mopub.mobileads.Source", responseString);
-                    mActivity.startActivity(i);
+
+                if(!mPrefetchingAd){
+                    displayAd(adInfo);
+                } else {
+                    sPrefetchedAd = adInfo;
+                    mPrefetchingAd = false;
                 }
             }
         });
@@ -117,6 +140,7 @@ public class MoPubInterstitial {
                 if (mListener != null) {
                     mListener.OnInterstitialFailed();
                 }
+                mPrefetchingAd = false;
             }
         });
     }
@@ -126,17 +150,27 @@ public class MoPubInterstitial {
     }
     
     public void showAd() {
+        mPrefetchingAd = false;
         mInterstitialView.loadAd();
     }
-/* TODO:
+
     public void prefetchAd() {
-    
+        if(sPrefetchedAd == null){
+            mPrefetchingAd = true;
+            mInterstitialView.loadAd();
+        }
     }
     
-    public void showPrefetchedAd() {
-        
+    public boolean showPrefetchedAd() {
+        AdInfo ad = sPrefetchedAd;
+        if(ad != null){
+            displayAd(ad);
+            return(true);
+        } else {
+            return(false);
+        }
     }
-*/
+
     public void setListener(MoPubInterstitialListener listener) {
         mListener = listener;
     }
@@ -149,6 +183,16 @@ public class MoPubInterstitial {
         mInterstitialView.trackImpression();
         if (mListener != null) {
             mListener.OnInterstitialLoaded();
+        }
+    }
+
+    protected void displayAd(AdInfo ad){
+        if (ad != null && mActivity != null) {
+            sPrefetchedAd = null;
+            Intent i = new Intent(mActivity, mActivityClass);
+            i.putExtra("com.mopub.mobileads.AdUnitId", ad.getAdUnitId());
+            i.putExtra("com.mopub.mobileads.Source", ad.getmResponseString());
+            mActivity.startActivity(i);
         }
     }
     
