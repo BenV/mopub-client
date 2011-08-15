@@ -68,9 +68,14 @@ public class MoPubView extends FrameLayout {
     public interface OnAdClickedListener {
         public void OnAdClicked(MoPubView m);
     }
+    
+    public enum LocationAwareness {
+        LOCATION_AWARENESS_NORMAL, LOCATION_AWARENESS_TRUNCATED, LOCATION_AWARENESS_DISABLED
+    }
 
     public static String HOST = "ads.mopub.com";
     public static String AD_HANDLER = "/m/ad";
+    public static final int DEFAULT_LOCATION_PRECISION = 6;
 
     protected AdView mAdView;
     private Activity mActivity;
@@ -78,6 +83,8 @@ public class MoPubView extends FrameLayout {
     private Context mContext;
     private BroadcastReceiver mScreenStateReceiver;
     private boolean mIsInForeground;
+    private LocationAwareness mLocationAwareness;
+    private int mLocationPrecision;
 
     private OnAdWillLoadListener mOnAdWillLoadListener;
     private OnAdLoadedListener mOnAdLoadedListener;
@@ -94,6 +101,8 @@ public class MoPubView extends FrameLayout {
 
         mContext = context;
         mIsInForeground = (getVisibility() == VISIBLE);
+        mLocationAwareness = LocationAwareness.LOCATION_AWARENESS_NORMAL;
+        mLocationPrecision = DEFAULT_LOCATION_PRECISION;
         
         setHorizontalScrollBarEnabled(false);
         setVerticalScrollBarEnabled(false);
@@ -104,9 +113,9 @@ public class MoPubView extends FrameLayout {
         // Here, we'll work around it by trying to create a file store and then just go inert
         // if it's not accessible.
         if (WebViewDatabase.getInstance(context) == null) {
-            Log.e("MoPub", "Disabling MoPub. Local cache file is inaccessbile so MoPub will " +
+            Log.e("MoPub", "Disabling MoPub. Local cache file is inaccessible so MoPub will " +
                     "fail if we try to create a WebView. Details of this Android bug found at:" +
-            "http://code.google.com/p/android/issues/detail?id=10789");
+                    "http://code.google.com/p/android/issues/detail?id=10789");
             return;
         }
 
@@ -200,42 +209,32 @@ public class MoPubView extends FrameLayout {
     }
 
     protected void registerClick() {
-        if (mAdView == null) {
-            return;
-        }
-        mAdView.registerClick();
+        if (mAdView != null) {
+            mAdView.registerClick();
 
-        // Let any listeners know that an ad was clicked
-        adClicked();
+            // Let any listeners know that an ad was clicked
+            adClicked();
+        }
     }
     
     protected void loadHtmlString(String html) {
-        if (mAdView != null) {
-            mAdView.loadResponseString(html);
-        }
+        if (mAdView != null) mAdView.loadResponseString(html);
     }
     
     protected void trackNativeImpression() {
         Log.d("MoPub", "Tracking impression for native adapter.");
-        if(mAdView != null){
-            mAdView.trackImpression();
-        }
+        mAdView.trackImpression();
+        if (mAdView != null) mAdView.trackImpression();
     }
 
     // Getters and Setters
 
     public void setAdUnitId(String adUnitId) {
-        if (mAdView == null) {
-            return;
-        }
-        mAdView.setAdUnitId(adUnitId);
+        if (mAdView != null) mAdView.setAdUnitId(adUnitId);
     }
 
     public void setKeywords(String keywords) {
-        if (mAdView == null) {
-            return;
-        }
-        mAdView.setKeywords(keywords);
+        if (mAdView != null) mAdView.setKeywords(keywords);
     }
 
     public String getKeywords() {
@@ -345,6 +344,13 @@ public class MoPubView extends FrameLayout {
             mOnAdClickedListener.OnAdClicked(this);
         }
     }
+    
+    protected void nativeAdLoaded() {
+        if (mAdView != null) {
+            mAdView.scheduleRefreshTimerIfEnabled();
+        }
+        adLoaded();
+    }
 
     public void setOnAdWillLoadListener(OnAdWillLoadListener listener) {
         mOnAdWillLoadListener = listener;
@@ -364,5 +370,21 @@ public class MoPubView extends FrameLayout {
 
     public void setOnAdClickedListener(OnAdClickedListener listener) {
         mOnAdClickedListener = listener;
+    }
+    
+    public void setLocationAwareness(LocationAwareness awareness) {
+        mLocationAwareness = awareness;
+    }
+
+    public LocationAwareness getLocationAwareness() {
+        return mLocationAwareness;
+    }
+
+    public void setLocationPrecision(int precision) {
+        mLocationPrecision = (precision >= 0) ? precision : 0;
+    }
+
+    public int getLocationPrecision() {
+        return mLocationPrecision;
     }
 }

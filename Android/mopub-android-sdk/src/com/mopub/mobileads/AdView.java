@@ -54,26 +54,27 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 
+import com.mopub.mobileads.MoPubView.LocationAwareness;
+
 import org.apache.http.Header;
 import org.apache.http.HttpEntity;
-import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
-import org.apache.http.client.methods.HttpUriRequest;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.params.BasicHttpParams;
 import org.apache.http.params.HttpConnectionParams;
 import org.apache.http.params.HttpParams;
-import org.apache.http.protocol.BasicHttpContext;
-import org.apache.http.protocol.ExecutionContext;
-import org.apache.http.protocol.HttpContext;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.text.SimpleDateFormat;
@@ -137,7 +138,6 @@ public class AdView extends WebView {
     private class AdWebViewClient extends WebViewClient {
         @Override
         public boolean shouldOverrideUrlLoading(WebView view, String url) {
-            Log.d("MoPub", "Ad view is loading " + url);
             AdView adView = (AdView) view;
            
             // Handle the special mopub:// scheme calls.
@@ -151,10 +151,23 @@ public class AdView extends WebView {
                 else if (host.equals("custom")) adView.handleCustomIntentFromUri(uri);
                 return true;
             }
+            // Handle other phone intents.
+            else if (url.startsWith("tel:") || url.startsWith("voicemail:") ||
+                    url.startsWith("sms:") || url.startsWith("mailto:") ||
+                    url.startsWith("geo:") || url.startsWith("google.streetview:")) { 
+                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url)); 
+                try {
+                    getContext().startActivity(intent);
+                } catch (ActivityNotFoundException e) {
+                    Log.w("MoPub", "Could not handle intent with URI: " + url +
+                        ". Is this intent unsupported on your phone?");
+                }
+                return true;
+            }
 
             String clickthroughUrl = adView.getClickthroughUrl();
             if (clickthroughUrl != null) url = clickthroughUrl + "&r=" + Uri.encode(url);
-            Log.d("MoPub", "Click URL: " + url);
+            Log.d("MoPub", "Ad clicked. Click URL: " + url);
             mMoPubView.adClicked();
 
             showBrowserAfterFollowingRedirectsForUrl(url);
@@ -166,9 +179,8 @@ public class AdView extends WebView {
             // If the URL being loaded shares the redirectUrl prefix, open it in the browser.
             String redirectUrl = ((AdView)view).getRedirectUrl();
             if (redirectUrl != null && url.startsWith(redirectUrl)) {
-                Intent actionIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
                 view.stopLoading();
-                view.getContext().startActivity(actionIntent);
+                showBrowserAfterFollowingRedirectsForUrl(url);
             }
         }
     }
@@ -176,7 +188,7 @@ public class AdView extends WebView {
     private void pageFinished() {
         Log.i("MoPub", "Ad successfully loaded.");
         mIsLoading = false;
-        if (mAutorefreshEnabled) scheduleRefreshTimer();
+        scheduleRefreshTimerIfEnabled();
         mMoPubView.removeAllViews();
         FrameLayout.LayoutParams layoutParams = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -190,7 +202,7 @@ public class AdView extends WebView {
     private void pageFailed() {
         Log.i("MoPub", "Ad failed to load.");
         mIsLoading = false;
-        if (mAutorefreshEnabled) scheduleRefreshTimer();
+        scheduleRefreshTimerIfEnabled();
         mMoPubView.adFailed();
     }
 
@@ -219,32 +231,88 @@ public class AdView extends WebView {
     private class LoadClickedUrlTask extends AsyncTask<String, Void, String> {
         @Override
         protected String doInBackground(String... urls) {
-            HttpClient httpclient = getAdViewHttpClient();
-            HttpContext ctx = new BasicHttpContext();
-            HttpGet httpget = new HttpGet(urls[0]);
-            httpget.addHeader("User-Agent", getSettings().getUserAgentString());
-            
+            String startingUrl = urls[0];
+            URL url = null;
             try {
-                httpclient.execute(httpget, ctx);
-            } catch (Exception e) {
-                Log.d("MoPub", "Couldn't load click URL.");
-                return null;
+                url = new URL(startingUrl);
+            } catch (MalformedURLException e) {
+                // If starting URL is a market URL, just return it.
+                return (startingUrl.startsWith("market://")) ? startingUrl : "";
             }
             
-            HttpHost host = (HttpHost) ctx.getAttribute(ExecutionContext.HTTP_TARGET_HOST);
-            HttpUriRequest req = (HttpUriRequest) ctx.getAttribute(ExecutionContext.HTTP_REQUEST);
-            String finalUri = host.toURI() + req.getURI();
-            Log.d("MoPub", "Final URI to show in browser: " + finalUri);
-            return finalUri;
+            // Find the target URL, manually following redirects if necessary. We can't use 
+            // HttpClient for this since the target may not be a supported URL (e.g. a market URL).
+            int statusCode = -1;
+            HttpURLConnection connection = null;
+            String nextLocation = url.toString();
+            
+            // Keep track of where we've been to detect redirect cycles.
+            Set<String> redirectLocations = new HashSet<String>();
+            redirectLocations.add(nextLocation);
+            
+            try {
+                do {
+                    connection = (HttpURLConnection) url.openConnection();
+                    connection.setRequestProperty("User-Agent", mUserAgent);
+                    connection.setInstanceFollowRedirects(false);
+                    
+                    statusCode = connection.getResponseCode();
+                    if (statusCode == HttpStatus.SC_OK) {
+                        // Successfully reached the end of redirects: nextLocation is our target.
+                        connection.disconnect();
+                        break;
+                    } else {
+                        // Depending on statusCode, we'll either continue to redirect, or error
+                        // out (in which case nextLocation will probably be null).
+                        nextLocation = connection.getHeaderField("location");
+                        connection.disconnect();
+                        
+                        // Check for redirect cycle.
+                        if (!redirectLocations.add(nextLocation)) {
+                            Log.d("MoPub", "Click redirect cycle detected -- will show blank.");
+                            return "";
+                        }
+                            
+                        url = new URL(nextLocation);
+                    }
+                }
+                while (isStatusCodeForRedirection(statusCode));
+            } catch (IOException e) {
+                // Might result from nextLocation being a market URL. If so, return that URL.
+                if (nextLocation != null) {
+                    return (nextLocation.startsWith("market://")) ? nextLocation : "";
+                } else return "";
+            } finally {
+                if (connection != null) connection.disconnect();
+            }
+            
+            return nextLocation;
         }
         
+        private boolean isStatusCodeForRedirection(int statusCode) {
+            return (statusCode == HttpStatus.SC_MOVED_TEMPORARILY ||
+                    statusCode == HttpStatus.SC_MOVED_PERMANENTLY ||
+                    statusCode == HttpStatus.SC_TEMPORARY_REDIRECT ||
+                    statusCode == HttpStatus.SC_SEE_OTHER);
+        }
+
         @Override
         protected void onPostExecute(String uri) {
-            if (uri == null) uri = "about:blank";
+            if (uri == null || uri.equals("")) uri = "about:blank";
+            Log.d("MoPub", "Final URI to show in browser: " + uri);
             Intent actionIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(uri));
             try {
                 getContext().startActivity(actionIntent);
             } catch (ActivityNotFoundException e) {
+                String action = actionIntent.getAction();
+                if (action.startsWith("market://")) {
+                    Log.w("MoPub", "Could not handle market action: " + action
+                            + ". Perhaps you're running in the emulator, which does not have "
+                            + "the Android Market?");
+                } else {
+                    Log.w("MoPub", "Could not handle intent action: " + action);
+                }
+                
                 getContext().startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("about:blank")));
             }
         }
@@ -265,9 +333,20 @@ public class AdView extends WebView {
     
     /*
      * Returns the last known location of the device using its GPS and network location providers.
-     * May be null if location access is disabled, or if the location providers don't exist.
+     * May be null if: 
+     * - Location permissions are not requested in the Android manifest file
+     * - The location providers don't exist
+     * - Location awareness is disabled in the parent MoPubView
      */
     private Location getLastKnownLocation() {
+        LocationAwareness locationAwareness = mMoPubView.getLocationAwareness();
+        int locationPrecision = mMoPubView.getLocationPrecision();
+        Location result = null;
+        
+        if (locationAwareness == LocationAwareness.LOCATION_AWARENESS_DISABLED) {
+            return null;
+        }
+        
         LocationManager lm 
                 = (LocationManager) getContext().getSystemService(Context.LOCATION_SERVICE);
         Location gpsLocation = null;
@@ -288,13 +367,32 @@ public class AdView extends WebView {
             Log.d("MoPub", "Failed to retrieve location: device has no network provider.");
         }
         
-        if (gpsLocation != null && networkLocation != null) {
-            if (gpsLocation.getTime() > networkLocation.getTime()) return gpsLocation;
-            else return networkLocation;
+        if (gpsLocation == null && networkLocation == null) {
+            return null;
         }
-        else if (gpsLocation != null) return gpsLocation;
-        else if (networkLocation != null) return networkLocation;
-        else return null;
+        else if (gpsLocation != null && networkLocation != null) {
+            if (gpsLocation.getTime() > networkLocation.getTime()) result = gpsLocation;
+            else result = networkLocation;
+        }
+        else if (gpsLocation != null) result = gpsLocation;
+        else result = networkLocation;
+        
+        // Truncate latitude/longitude to the number of digits specified by locationPrecision.
+        if (locationAwareness == LocationAwareness.LOCATION_AWARENESS_TRUNCATED) {
+            double lat = result.getLatitude();
+            double truncatedLat = BigDecimal.valueOf(lat)
+                .setScale(locationPrecision, BigDecimal.ROUND_HALF_DOWN)
+                .doubleValue();
+            result.setLatitude(truncatedLat);
+            
+            double lon = result.getLongitude();
+            double truncatedLon = BigDecimal.valueOf(lon)
+                .setScale(locationPrecision, BigDecimal.ROUND_HALF_DOWN)
+                .doubleValue();
+            result.setLongitude(truncatedLon);
+        }
+        
+        return result;
     }
     
     private String generateAdUrl() {
@@ -302,8 +400,8 @@ public class AdView extends WebView {
         sz.append("?v=4&id=" + mAdUnitId);
         
         String udid = Secure.getString(getContext().getContentResolver(), Secure.ANDROID_ID);
-        String udidDigest = (udid == null) ? "" : md5("mopub-" + udid);
-        sz.append("&udid=" + udidDigest);
+        String udidDigest = (udid == null) ? "" : sha1(udid);
+        sz.append("&udid=sha:" + udidDigest);
 
         if (mKeywords != null) {
             sz.append("&q=" + Uri.encode(mKeywords));
@@ -316,7 +414,7 @@ public class AdView extends WebView {
         sz.append("&z=" + getTimeZoneOffsetString());
         
         int orientation = getResources().getConfiguration().orientation;
-        String orString = "u";
+        String orString = DEVICE_ORIENTATION_UNKNOWN;
         if (orientation == Configuration.ORIENTATION_PORTRAIT) {
             orString = DEVICE_ORIENTATION_PORTRAIT;
         } else if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -334,9 +432,9 @@ public class AdView extends WebView {
         return sz.toString();
     }
     
-    private String md5(String s) {
+    private String sha1(String s) {
         try { 
-            MessageDigest digest = MessageDigest.getInstance("MD5");
+            MessageDigest digest = MessageDigest.getInstance("SHA-1");
             digest.update(s.getBytes());
             byte messageDigest[] = digest.digest();
             
@@ -451,6 +549,7 @@ public class AdView extends WebView {
         }
         
         public void execute() {
+            mIsLoading = false;
             mMoPubView.loadNativeSDK(mParamsHash);
         }
     }
@@ -682,9 +781,9 @@ public class AdView extends WebView {
         }
     };
 
-    protected void scheduleRefreshTimer() {
+    protected void scheduleRefreshTimerIfEnabled() {
         cancelRefreshTimer();
-        if (mRefreshTimeMilliseconds <= 0) return;
+        if (!mAutorefreshEnabled || mRefreshTimeMilliseconds <= 0) return;
         mRefreshHandler.postDelayed(mRefreshRunnable, mRefreshTimeMilliseconds);
     }
 
@@ -754,7 +853,7 @@ public class AdView extends WebView {
         mAutorefreshEnabled = enabled;
         
         if (!mAutorefreshEnabled) cancelRefreshTimer();
-        else scheduleRefreshTimer();
+        else scheduleRefreshTimerIfEnabled();
     }
     
     public boolean getAutorefreshEnabled() {
