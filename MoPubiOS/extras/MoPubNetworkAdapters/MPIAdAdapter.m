@@ -11,10 +11,14 @@
 #import "MPLogging.h"
 
 @interface MPIAdAdapter ()
+
 + (ADBannerView *)sharedAdBannerView;
 - (void)releaseBannerViewDelegateSafely;
 - (void)setBannerViewContentSizeIdentifierForOrientation:(UIInterfaceOrientation)orientation;
+
 @end
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 @implementation MPIAdAdapter
 
@@ -53,19 +57,32 @@
 		
 		_adBannerView = [[MPIAdAdapter sharedAdBannerView] retain];
 		
-		CGSize size = self.adView.bounds.size;
+		CGSize size = [self.delegate maximumAdSize];
 		_adBannerView.frame = (CGRect){{0, 0}, size};
 		_adBannerView.delegate = self;
 
+		MPNativeAdOrientation allowedOrientation = [self.delegate allowedNativeAdsOrientation];
 		UIInterfaceOrientation currentOrientation = 
-				[UIApplication sharedApplication].statusBarOrientation;
-		[self setBannerViewContentSizeIdentifierForOrientation:currentOrientation];
+			[UIApplication sharedApplication].statusBarOrientation;
+		switch (allowedOrientation)
+		{
+			case MPNativeAdOrientationPortrait:
+				[self setBannerViewContentSizeIdentifierForOrientation:
+					UIInterfaceOrientationPortrait];
+				break;
+			case MPNativeAdOrientationLandscape:
+				[self setBannerViewContentSizeIdentifierForOrientation:
+					UIInterfaceOrientationLandscapeLeft];
+				break;
+			default:
+				[self setBannerViewContentSizeIdentifierForOrientation:currentOrientation];
+				break;
+		}
 		
 		if ([_adBannerView isBannerLoaded])
 		{
 			MPLogInfo(@"iAd banner has previously loaded an ad, so just show it.");
-			[self.adView setAdContentView:_adBannerView];
-			[self.adView adapterDidFinishLoadingAd:self shouldTrackImpression:NO];
+			[self.delegate adapter:self didFinishLoadingAd:_adBannerView shouldTrackImpression:YES];
 		}
 	} 
 	else 
@@ -109,17 +126,20 @@
 	if (!_adBannerView) 
 		return;
 	
-	if (UIInterfaceOrientationIsLandscape(newOrientation))
+	MPNativeAdOrientation allowedOrientation = [self.delegate allowedNativeAdsOrientation];
+	switch (allowedOrientation)
 	{
-		// Tests for iOS >= 4.2.
-		_adBannerView.currentContentSizeIdentifier = (&ADBannerContentSizeIdentifierLandscape) ? 
-		ADBannerContentSizeIdentifierLandscape : ADBannerContentSizeIdentifier480x32;
-	}
-	else
-	{
-		// Tests for iOS >= 4.2.
-		_adBannerView.currentContentSizeIdentifier = (&ADBannerContentSizeIdentifierPortrait) ?
-		ADBannerContentSizeIdentifierPortrait : ADBannerContentSizeIdentifier320x50;
+		case MPNativeAdOrientationPortrait:
+			[self setBannerViewContentSizeIdentifierForOrientation:
+				UIInterfaceOrientationPortrait];
+			break;
+		case MPNativeAdOrientationLandscape:
+			[self setBannerViewContentSizeIdentifierForOrientation:
+				UIInterfaceOrientationLandscapeLeft];
+			break;
+		default:
+			[self setBannerViewContentSizeIdentifierForOrientation:newOrientation];
+			break;
 	}
 	
 	// Prevent this view from automatically positioning itself in the center of its superview.
@@ -135,35 +155,27 @@
 - (void)bannerView:(ADBannerView *)banner didFailToReceiveAdWithError:(NSError *)error
 {
 	MPLogInfo(@"iAd failed in trying to load or refresh an ad.");
-
-	// Edge case: This method schedules the banner view to be deallocated. If this method
-	// was called due to a failed internal iAd refresh, there is a chance the user could
-	// initiate a banner action, only to have the banner view be deallocated during that action.
-	// So, just don't allow the user to interact with the iAd.
-	[_adBannerView setUserInteractionEnabled:NO];
-	
-	[self.adView adapter:self didFailToLoadAdWithError:error];
+	[self.delegate adapter:self didFailToLoadAdWithError:error];
 }
 
 - (void)bannerViewActionDidFinish:(ADBannerView *)banner
 {
 	MPLogInfo(@"iAd finished executing banner action.");
-	[self.adView userActionDidEndForAdapter:self];
+	[self.delegate userActionDidEndForAdapter:self];
 }
 
 - (BOOL)bannerViewActionShouldBegin:(ADBannerView *)banner willLeaveApplication:(BOOL)willLeave
 {
 	MPLogInfo(@"iAd should begin banner action.");
-	[self.adView userActionWillBeginForAdapter:self];
-	if (willLeave) [self.adView userWillLeaveApplicationFromAdapter:self];
+	[self.delegate userActionWillBeginForAdapter:self];
+	if (willLeave) [self.delegate userWillLeaveApplicationFromAdapter:self];
 	return YES;
 }
 
 - (void)bannerViewDidLoadAd:(ADBannerView *)banner
 {
 	MPLogInfo(@"iAd has successfully loaded a new ad.");
-	[self.adView setAdContentView:_adBannerView];
-	[self.adView adapterDidFinishLoadingAd:self shouldTrackImpression:YES];
+	[self.delegate adapter:self didFinishLoadingAd:banner shouldTrackImpression:YES];
 }
 
 @end

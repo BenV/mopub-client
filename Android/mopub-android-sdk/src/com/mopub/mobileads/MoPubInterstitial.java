@@ -87,7 +87,7 @@ public class MoPubInterstitial {
         
         protected void trackImpression() {
             Log.d("MoPub", "Tracking impression for interstitial.");
-            mAdView.trackImpression();
+            if (mAdView != null) mAdView.trackImpression();
         }
     }
 
@@ -181,9 +181,7 @@ public class MoPubInterstitial {
     
     protected void interstitialLoaded() {
         mInterstitialView.trackImpression();
-        if (mListener != null) {
-            mListener.OnInterstitialLoaded();
-        }
+        if (mListener != null) mListener.OnInterstitialLoaded();
     }
 
     protected void displayAd(AdInfo ad){
@@ -197,15 +195,11 @@ public class MoPubInterstitial {
     }
     
     protected void interstitialFailed() {
-        if (mInterstitialView != null) {
-            mInterstitialView.loadFailUrl();
-        }
+        mInterstitialView.loadFailUrl();
     }
     
     protected void interstitialClicked() {
-        if (mInterstitialView != null) {
-            mInterstitialView.registerClick();
-        }
+        mInterstitialView.registerClick();
     }
     
     public void destroy() {

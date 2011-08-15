@@ -65,18 +65,15 @@ public class MoPubActivity extends Activity {
 
         mMoPubView = new MoPubView(this);
         mMoPubView.setAdUnitId(adUnitId);
-        if (keywords != null) {
-            mMoPubView.setKeywords(keywords);
-        }
-        if (timeout > 0) {
-            mMoPubView.setTimeout(timeout);
-        }
+        
+        if (keywords != null) mMoPubView.setKeywords(keywords);
+        if (timeout > 0) mMoPubView.setTimeout(timeout);
         if (source != null) {
             source = sourceWithImpressionTrackingDisabled(source);
             mMoPubView.loadHtmlString(source);
         }
 
-        this.getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
         setContentView(createContentView());
     }
     
