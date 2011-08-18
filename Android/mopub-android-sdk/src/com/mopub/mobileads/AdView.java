@@ -50,6 +50,7 @@ import android.util.Log;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.webkit.MimeTypeMap;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
@@ -163,6 +164,12 @@ public class AdView extends WebView {
                         ". Is this intent unsupported on your phone?");
                 }
                 return true;
+            } else {
+                String extension = MimeTypeMap.getFileExtensionFromUrl(url);
+                String mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension);
+                if(handleMimeType(url, mimeType)){
+                    return(true);
+                }
             }
 
             String clickthroughUrl = adView.getClickthroughUrl();
@@ -788,6 +795,16 @@ public class AdView extends WebView {
 
     protected void cancelRefreshTimer() {
         mRefreshHandler.removeCallbacks(mRefreshRunnable);
+    }
+
+    private boolean handleMimeType(String url, String mimeType){
+        if(mimeType != null && mimeType.startsWith("video/")) {
+            Intent videoIntent = new Intent(Intent.ACTION_VIEW);
+            videoIntent.setDataAndType(Uri.parse(url), mimeType);
+            getContext().startActivity(videoIntent);
+            return true;
+        }
+        return false;
     }
 
     // Getters and Setters
