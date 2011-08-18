@@ -50,6 +50,7 @@ public class MoPubActivity extends Activity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        setResult(RESULT_OK);
         
         requestWindowFeature(Window.FEATURE_NO_TITLE);
 

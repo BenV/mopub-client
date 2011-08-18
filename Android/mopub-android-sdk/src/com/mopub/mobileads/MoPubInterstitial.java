@@ -43,7 +43,7 @@ import android.content.Intent;
 import android.util.Log;
 
 public class MoPubInterstitial {
-    
+    public static final int REQUEST_CODE_INTERSTITIAL = 173975624;
     private MoPubInterstitialView mInterstitialView;
     private MoPubInterstitialListener mListener;
     private Activity mActivity;
@@ -190,7 +190,7 @@ public class MoPubInterstitial {
             Intent i = new Intent(mActivity, mActivityClass);
             i.putExtra("com.mopub.mobileads.AdUnitId", ad.getAdUnitId());
             i.putExtra("com.mopub.mobileads.Source", ad.getmResponseString());
-            mActivity.startActivity(i);
+            mActivity.startActivityForResult(i, REQUEST_CODE_INTERSTITIAL);
         }
     }
     
