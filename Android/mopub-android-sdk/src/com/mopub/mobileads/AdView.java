@@ -563,8 +563,11 @@ public class AdView extends WebView {
         
         public void execute() {
             mResponseString = mData;
-            loadDataWithBaseURL("http://"+MoPubView.HOST+"/", 
-                mData, "text/html", "utf-8", null);
+
+            // Kongregate: We were running into a crash where mData was null
+            if(mData != null){
+                loadDataWithBaseURL("http://"+MoPubView.HOST+"/", mData, "text/html", "utf-8", null);
+            }
         }
     }
 
